@@ -3,6 +3,11 @@
 ## YandexTaxi
 ### Инициализация
 ```php
+/**
+ * @param string $clientID 
+ * @param string $apiKey ключ API
+ * @param string $parkID идентификатор парка
+ */
 $yandexTaxi = new \app\services\YandexTaxi(
     $clientID,
     $apiKey,
@@ -12,8 +17,11 @@ $yandexTaxi = new \app\services\YandexTaxi(
 
 ###  Начисление/списание средств со счета
 ```php
-// amount: 100 или -100
-$result = $yandexTaxi->pay('423d34eb23b2c4ad47b196aad93f90b3', 500);
+/**
+ * @param string $driver_id идентификатор водителя в Yandex. Пример: 423d34eb23b2c4ad47b196aad93f90b3
+ * @param float $amount сумма. Если число отрицательное, то списывается
+ */
+$result = $yandexTaxi->pay($driver_id, $amount);
 ```
 
 ### Получение данных о водителе по номеру
