@@ -9,9 +9,9 @@ use app\models\WithdrawalMethod;
 class Qiwi extends Executer
 {
 
-    private $_terminal_id = Yii::$app->params['qiwi_terminal_id'];
+    private $_terminal_id;
 
-    private $_password = Yii::$app->params['qiwi_password'];
+    private $_password;
 
     private $income_wire_transfer = 1; // 0 - нал, 1 - безнал
 
@@ -21,6 +21,12 @@ class Qiwi extends Executer
     ];
 
     private $log;
+
+    public function __construct()
+    {
+        $this->_terminal_id = Yii::$app->params['qiwi_terminal_id'];
+        $this->_password = Yii::$app->params['qiwi_password'];
+    }
     
     public function balance()
     {
@@ -219,5 +225,68 @@ XML;*/
         if (!$this->log->save()) {
             Yii::error("Ошибка сохранения WithdrawalLog::logResult в Qiwi::pay " . print_r($this->log, true), 'API');
         }
+    }
+
+    public function status($transactionID)
+    {
+        $response = new \stdClass();
+        $response->success = true;
+        try {
+            $this->addHeader('Content-Type: application/xml; charset=utf-8');
+
+            $this->addStringParams(<<<XML
+<?xml version="1.0" encoding="utf-8"?>
+<request>
+    <request-type>pay</request-type>
+    <terminal-id>{$this->_terminal_id}</terminal-id>
+    <extra name="password">{$this->_password}</extra>
+    <status>
+        <payment>
+            <transaction-number>{$transactionID}</transaction-number>
+        </payment>
+    </status>
+</request>
+XML);
+            $result = $this->post('https://api.qiwi.com/xml/topup.jsp');
+
+            if (!$result) {
+                throw new \Exception('Ошибка получения данных');
+            }
+
+            $xml = simplexml_load_string($result);
+
+            if (!$xml) {
+                throw new \Exception('Ошибка преобразования данных');
+            }
+
+            if (!isset($xml->{'result-code'})) {
+                throw new \Exception('Ошибка получения параметров ответа');
+            }
+
+            $resultCode = $xml->{'result-code'}->__toString();
+
+            if ($resultCode !== '0') {
+                throw new \Exception($xml->{'result-code'}->attributes()->message->__toString());
+            }
+
+            if (!isset($xml->payment)) {
+                throw new \Exception('Транзакция не найдена');
+            }
+
+            $response->status = $xml->payment->attributes()->status->__toString();
+
+            Yii::info("Получение статуса QIWI: (Транзакция: {$transactionID}; Статус: {$response->status})", 'API');
+
+        } catch (\Exception $e) {
+            $response = new \stdClass();
+            $response->success = false;
+            $response->err_code = $e->getCode();
+            $response->err_line = $e->getLine();
+            $response->err_description = $e->getMessage();
+
+            Yii::error("Ошибка получения статуса QIWI: " . print_r($response, true), 'API');
+        }
+
+        return $response;
     }
 }
