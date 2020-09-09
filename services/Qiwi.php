@@ -267,7 +267,7 @@ XML);
             }
 
             if (!isset($xml->payment)) {
-                throw new \Exception('Транзакция не найдена');
+                throw new \Exception("Транзакция {$transactionID} не найдена");
             }
 
             $response->status = $xml->payment->attributes()->status->__toString();
