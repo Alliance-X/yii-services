@@ -94,9 +94,6 @@ XML);
                 $receiver = '7' . mb_substr($receiver, -10);
             }
 
-            // Комиссия 40 рублей
-            $amount -= 40;
-
             $this->logStart($transactionID, $type, $receiver, $amount);
 
             $this->addHeader('Content-Type: application/xml; charset=utf-8');
