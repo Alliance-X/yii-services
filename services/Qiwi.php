@@ -94,7 +94,17 @@ XML);
                 $receiver = '7' . mb_substr($receiver, -10);
             }
 
-            $this->logStart($transactionID, $type, $receiver, $amount);
+            $drivers_commission = Yii::$app->user->identity->withdrawalSettings->drivers_commission;
+            $min_withdrawal_amount = $drivers_commission + 1;
+
+            if ($amount < $min_withdrawal_amount) {
+                throw new \Exception("Минимальная сумма транзакции {$min_withdrawal_amount} руб.");
+            }
+
+            // Берем комиссию
+            $amount -= $drivers_commission;
+
+            $this->logStart($transactionID, $type, $receiver, $amount, $drivers_commission);
 
             $this->addHeader('Content-Type: application/xml; charset=utf-8');
 
@@ -160,14 +170,18 @@ XML;*/
                 throw new \Exception('Ошибка преобразования данных');
             }
 
-            if (!isset($xml->payment->attributes()->{'result-code'})) {
+            if (!isset($xml->payment, $xml->payment->attributes()->{'result-code'})) {
+                if ($xml->{'result-code'}->attributes()->fatal->__toString() == true) {
+                    throw new \Exception(sprintf("%d «%s»", $xml->{'result-code'}->__toString(), $xml->{'result-code'}->attributes()->message->__toString()));
+                }
                 throw new \Exception('Ошибка получения параметров ответа');
             }
 
             $resultCode = $xml->payment->attributes()->{'result-code'}->__toString();
 
             if ($resultCode != 0) {
-                throw new \Exception($xml->{'result-code'}->attributes()->message->__toString());
+                throw new \Exception($xml->payment->attributes()->message->__toString());
+                // throw new \Exception($xml->{'result-code'}->attributes()->fatal->__toString());
             }
 
             $response->status = $xml->payment->attributes()->status->__toString();
@@ -187,7 +201,7 @@ XML;*/
         return $response;
     }
 
-    private function logStart($transactionID, $type, $receiver, $amount)
+    private function logStart($transactionID, $type, $receiver, $amount, $commission)
     {
         $user = Yii::$app->user->identity;
 
@@ -201,6 +215,7 @@ XML;*/
         $this->log->withdrawal_method_type = WithdrawalMethod::getNameById($type);
         $this->log->receiver = $receiver;
         $this->log->amount = (string) $amount;
+        $this->log->commission = (string) $commission;
         $this->log->date_create_operation = date('Y-m-d H:i:s');
         if (!$this->log->save()) {
             Yii::error("Ошибка сохранения WithdrawalLog::logStart в Qiwi::pay " . print_r($this->log, true), 'API');
@@ -267,7 +282,7 @@ XML);
             }
 
             if (!isset($xml->payment)) {
-                throw new \Exception("Транзакция {$transactionID} не найдена");
+                throw new \Exception("Транзакция {$transactionID} не найдена", 199);
             }
 
             $response->status = $xml->payment->attributes()->status->__toString();
